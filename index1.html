@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FulfillOps, running live</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,400;7..72,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE: a lab bench for three students defending one system: precise, calm, live.
+   IDEA: a scientific plate whose figure is running: delivery pipeline above, the cluster below, each owner's region inked in its own colour.
+   PICTURE: the live diagram: commits flow through CI into Argo CD, orders fly through API pods, PostgreSQL and workers.
+   COLOUR and TYPE: white ground, ink; prussian = Chris, violet = Bahjat, green = Ibaad; carmine only for errors. Literata titles, Inter UI.
+   LAYOUT: diagram left, scenarios grouped by owner right, then stock / invariants / metrics, orders + log, and who-owns-what. */
+:root{color-scheme:light dark;--bg:light-dark(#ffffff,#0f1217);--ink:light-dark(#10131a,#e7e9ee);--mute:light-dark(#5b6170,#9aa1ae);--rule:light-dark(#dfe2e8,#2a2f38);--soft:light-dark(#f4f6f9,#171b22);
+--ch:light-dark(#0b4f8a,#5ea8e8);--chs:light-dark(#e8f0f8,#132639);--bh:light-dark(#6b3fa0,#b892ea);--bhs:light-dark(#f3edf9,#251a33);--ib:light-dark(#0f7a5c,#4cc49a);--ibs:light-dark(#ebf6f1,#122a22);--cr:light-dark(#c1121f,#ff6b6f);--crs:light-dark(#fbe9ea,#3a1517)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 Inter,system-ui,sans-serif;overflow-x:clip}
+.band{padding:clamp(20px,3vw,40px) max(4vw,16px);max-width:1360px;margin:0 auto}
+h1,h2,h3.o{font-family:Literata,Georgia,serif;font-weight:600;line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(30px,4vw,46px)}h2{font-size:21px;margin-bottom:10px}
+.lede{max-width:72ch;color:var(--mute);margin:10px 0 0;font-size:16px}
+.note{font-size:13px;color:var(--mute)}
+.top{padding-bottom:6px}
+.main{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:24px;padding-top:12px}
+@media(max-width:1000px){.main{grid-template-columns:minmax(0,1fr)}}
+.scroll{overflow-x:auto}
+.fig{position:relative;min-width:700px;aspect-ratio:900/570;border:1px solid var(--rule);border-radius:10px;background:var(--soft)}
+.fig>svg{position:absolute;inset:0;width:100%;height:100%}
+svg text{font-family:Inter,system-ui,sans-serif;fill:var(--ink)}
+.node{fill:var(--bg);stroke:var(--ink);stroke-width:1.4}
+.wire{stroke:var(--rule);stroke-width:2;fill:none}
+.gone{opacity:.25}
+.dead{fill:var(--crs);stroke:var(--cr)}
+.panel{border:1px solid var(--rule);border-radius:10px;padding:12px}
+.controls{display:flex;flex-direction:column;gap:12px}
+.who{font:600 14px Inter,sans-serif;margin:0 0 8px;display:flex;align-items:center;gap:8px}
+.who::before{content:"";width:11px;height:11px;border-radius:50%;background:var(--c)}
+.who span{color:var(--mute);font-weight:400}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+button,select,input{font:inherit;font-size:15px;color:var(--ink);background:var(--bg);border:1px solid var(--rule);border-radius:8px;min-height:40px;padding:6px 10px}
+input[type=number]{width:66px}
+button{cursor:pointer;text-align:left}
+button:hover{border-color:var(--c,var(--ch))}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--ch);outline-offset:2px}
+.primary{background:var(--ch);color:var(--bg);border-color:var(--ch);font-weight:600}
+.scen{display:grid;gap:6px}.scen button{width:100%}
+.scen small{display:block;color:var(--mute);font-size:12.5px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px}
+.grid2{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:24px}
+@media(max-width:960px){.grid3,.grid2{grid-template-columns:minmax(0,1fr)}}
+.bar{height:10px;background:var(--soft);border-radius:5px;overflow:hidden;margin:4px 0 10px}
+.bar i{display:block;height:100%;background:var(--ch);transition:width .25s}
+.kv{display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid var(--rule);padding:4px 0;font-size:14px}
+.kv b{font-variant-numeric:tabular-nums}
+.ok{color:var(--ib);font-weight:600}.bad{color:var(--cr);font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--rule);white-space:nowrap}
+th{color:var(--mute);font-weight:500}
+td.n{text-align:right;font-variant-numeric:tabular-nums}
+.chip{display:inline-block;padding:1px 8px;border-radius:20px;font-size:12.5px;border:1px solid var(--rule)}
+.s-queued{color:var(--mute)}.s-processing{border-color:var(--bh);color:var(--bh)}.s-completed{background:var(--ch);color:var(--bg);border-color:var(--ch)}.s-failed{background:var(--cr);color:var(--bg);border-color:var(--cr)}
+.log{max-height:380px;overflow:auto;font-size:13.5px}
+.log div{padding:6px 0;border-bottom:1px solid var(--rule)}
+.log .t{color:var(--mute);font-variant-numeric:tabular-nums;margin-right:6px}
+.log code{display:block;color:var(--mute);font-size:12.5px;margin-top:2px;white-space:pre-wrap}
+.log .e{color:var(--cr)}.log .g{color:var(--ch)}.log .b{color:var(--bh)}.log .i{color:var(--ib)}
+code{overflow-wrap:anywhere;font-size:13px}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:13px;color:var(--mute)}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:-1px;background:var(--c)}
+.owner{border-top:3px solid var(--c);padding-top:12px}
+.owner h3{font-size:22px;color:var(--c)}
+.owner p{margin:6px 0 10px;color:var(--mute)}
+.owner ul{margin:0;padding-left:18px}.owner li{margin:3px 0}
+@media(max-width:600px){table{font-size:13px}.stack thead{display:none}.stack tr{display:grid;padding-block:10px}.stack td{display:flow-root;border:0;padding:3px 0;padding-inline-start:8em;text-align:start;white-space:normal}.stack td::before{content:attr(data-l);float:inline-start;width:7.5em;margin-inline-start:-8em;color:var(--mute)}.stack td:empty{display:none}}
+@media(prefers-reduced-motion:reduce){.bar i{transition:none}}
+</style><script>new MutationObserver(()=>{for(const c of document.querySelectorAll('.stack td:not([data-l])')){let i=0,p=c;while(p=p.previousElementSibling)i+=p.colSpan;c.dataset.l=c.closest('table').rows[0].cells[i]?.textContent||''}}).observe(document,{childList:true,subtree:true})</script></head>
+<body>
+<header class="band top">
+  <h1>FulfillOps, running live</h1>
+  <p class="lede">The whole system on one bench: code is delivered through CI and Argo CD into a Kubernetes cluster, where two API pods and two workers share one PostgreSQL database. Each colour is one person's part. Try their scenarios on the right.</p>
+  <p class="note">A simulation in your browser that follows the project's code and manifests. Timings are shortened (worker lease 4 s instead of 10 s, rollouts in seconds).</p>
+</header>
+
+<section class="band main">
+  <div>
+    <div class="scroll"><div class="fig"><svg id="dia" viewBox="0 0 900 570" role="img" aria-label="Live diagram of FulfillOps">
+      <!-- delivery pipeline -->
+      <text x="20" y="22" font-size="12" style="fill:var(--bh)" font-weight="600">Bahjat: CI pipeline</text>
+      <text x="660" y="22" font-size="12" style="fill:var(--ib)" font-weight="600">Ibaad: GitOps</text>
+      <rect class="node" x="20" y="34" width="90" height="56" rx="8" style="stroke:var(--bh)"/>
+      <text x="65" y="58" font-size="13" text-anchor="middle" font-weight="600">git push</text>
+      <text id="gits" x="65" y="76" font-size="11" text-anchor="middle" style="fill:var(--mute)">main</text>
+      <rect class="node" x="128" y="34" width="394" height="56" rx="8" style="stroke:var(--bh)"/>
+      <text x="138" y="50" font-size="11" style="fill:var(--mute)">GitHub Actions: each stage must pass before the next</text>
+      <g id="ci"></g>
+      <rect class="node" x="660" y="34" width="120" height="56" rx="8" style="stroke:var(--ib)"/>
+      <text x="720" y="58" font-size="13" text-anchor="middle" font-weight="600">Argo CD</text>
+      <text id="argos" x="720" y="76" font-size="11" text-anchor="middle" style="fill:var(--ib)">Synced · Healthy</text>
+      <path class="wire" d="M110 62 H128 M522 62 H660 M720 90 V122"/>
+      <text x="590" y="56" font-size="10.5" text-anchor="middle" style="fill:var(--mute)">image :sha</text>
+      <text id="tag" x="590" y="74" font-size="10.5" text-anchor="middle" style="fill:var(--mute)">newTag in Git</text>
+      <!-- cluster -->
+      <rect x="150" y="122" width="740" height="438" rx="14" fill="none" style="stroke:var(--ib)" stroke-width="1.6" stroke-dasharray="7 5"/>
+      <text x="164" y="142" font-size="12" style="fill:var(--ib)" font-weight="600">Ibaad: Kubernetes (kind) · namespace fulfillops · Argo CD keeps it equal to Git</text>
+      <rect x="300" y="158" width="420" height="390" rx="12" style="fill:var(--chs);stroke:var(--ch)" stroke-dasharray="5 5"/>
+      <text x="314" y="178" font-size="12" style="fill:var(--ch)" font-weight="600">Chris: API + database</text>
+      <rect x="738" y="158" width="142" height="390" rx="12" style="fill:var(--bhs);stroke:var(--bh)" stroke-dasharray="5 5"/>
+      <text x="750" y="178" font-size="12" style="fill:var(--bh)" font-weight="600">Bahjat: workers</text>
+      <path class="wire" d="M70 350 H230 M230 350 L390 260 M230 350 L390 440 M390 260 L600 350 M390 440 L600 350 M600 350 L810 260 M600 350 L810 440"/>
+      <g id="clients"></g>
+      <text x="70" y="448" font-size="13" text-anchor="middle">Clients</text>
+      <rect class="node" x="182" y="318" width="96" height="64" rx="8"/>
+      <text x="230" y="344" font-size="13" text-anchor="middle" font-weight="600">Service</text>
+      <text x="230" y="362" font-size="11" text-anchor="middle" style="fill:var(--mute)">to ready pods</text>
+      <g id="a1g"><rect class="node" x="322" y="220" width="136" height="80" rx="8"/>
+      <text x="390" y="244" font-size="13" text-anchor="middle" font-weight="600">API pod 1</text>
+      <text id="a1v" x="390" y="262" font-size="11" text-anchor="middle" style="fill:var(--mute)"></text>
+      <text id="a1s" x="390" y="282" font-size="11" text-anchor="middle" style="fill:var(--mute)">ready</text></g>
+      <g id="a2g"><rect class="node" x="322" y="400" width="136" height="80" rx="8"/>
+      <text x="390" y="424" font-size="13" text-anchor="middle" font-weight="600">API pod 2</text>
+      <text id="a2v" x="390" y="442" font-size="11" text-anchor="middle" style="fill:var(--mute)"></text>
+      <text id="a2s" x="390" y="462" font-size="11" text-anchor="middle" style="fill:var(--mute)">ready</text></g>
+      <path class="node" d="M530 280 v140 a70 16 0 0 0 140 0 v-140"/>
+      <ellipse class="node" cx="600" cy="280" rx="70" ry="16"/>
+      <text x="600" y="322" font-size="14" text-anchor="middle" font-weight="600">PostgreSQL</text>
+      <text id="dbq" x="600" y="346" font-size="11" text-anchor="middle" style="fill:var(--mute)">queued jobs: 0</text>
+      <text id="dbl" x="600" y="364" font-size="11" text-anchor="middle" style="fill:var(--mute)">waiting for lock: 0</text>
+      <text id="dbs" x="600" y="388" font-size="10" text-anchor="middle" style="fill:var(--mute)"></text>
+      <rect id="w1r" class="node" x="750" y="222" width="120" height="70" rx="8"/>
+      <text x="810" y="248" font-size="13" text-anchor="middle" font-weight="600">Worker 1</text>
+      <text id="w1s" x="810" y="268" font-size="11" text-anchor="middle" style="fill:var(--mute)">idle</text>
+      <rect id="w2r" class="node" x="750" y="402" width="120" height="70" rx="8"/>
+      <text x="810" y="428" font-size="13" text-anchor="middle" font-weight="600">Worker 2</text>
+      <text id="w2s" x="810" y="448" font-size="11" text-anchor="middle" style="fill:var(--mute)">idle</text>
+      <g id="dots"></g>
+    </svg></div></div>
+    <div class="legend"><span style="--c:var(--ch)">Chris: API + database</span><span style="--c:var(--bh)">Bahjat: workers, Docker, CI</span><span style="--c:var(--ib)">Ibaad: Kubernetes, Argo CD, drills</span><span style="--c:var(--cr)">error or fault</span></div>
+  </div>
+
+  <aside class="controls">
+    <div class="panel" style="--c:var(--ch)">
+      <p class="who" style="--c:var(--ch)">Chris <span>API + database</span></p>
+      <div class="row">
+        <select id="sku" aria-label="SKU"><option>KIT-100</option><option>PART-200</option><option>PACK-300</option></select>
+        <input id="qty" type="number" min="1" max="20" value="1" aria-label="Quantity">
+        <button class="primary" id="send">Send order</button>
+      </div>
+      <label class="note" style="display:block;margin:6px 0 8px"><input type="checkbox" id="reuse"> Reuse the last Idempotency-Key</label>
+      <div class="scen">
+        <button id="race">Race: 24 clients, 12 units<small>Resets the data; only 12 can win</small></button>
+        <button id="same">Same key ×8 on both pods<small>1 order, stock −1</small></button>
+        <button id="bool">Send "quantity": true<small>Rejected with 422 before the database</small></button>
+      </div>
+    </div>
+    <div class="panel" style="--c:var(--bh)">
+      <p class="who" style="--c:var(--bh)">Bahjat <span>workers, Docker, CI</span></p>
+      <div class="scen">
+        <button id="crash">Crash drill<small>A worker is killed mid-job; the lease expires and the other takes over</small></button>
+        <button id="poison">Poison order<small>5 attempts with backoff, then dead letter</small></button>
+        <button id="redpr">Push the bool bug<small>CI goes red; nothing is published</small></button>
+      </div>
+    </div>
+    <div class="panel" style="--c:var(--ib)">
+      <p class="who" style="--c:var(--ib)">Ibaad <span>Kubernetes, Argo CD, drills</span></p>
+      <div class="scen">
+        <button id="good">Good release<small>CI green → Argo CD → rolling update, probe counts failures</small></button>
+        <button id="broken">Broken release<small>New pod never ready → rollout halts → git revert</small></button>
+        <button id="drift">Drift: kubectl scale to 1<small>Argo CD self-heals back to 2 replicas</small></button>
+      </div>
+    </div>
+    <div class="row"><button id="reset">Reset test data</button><label for="speed">Speed</label><select id="speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select></div>
+  </aside>
+</section>
+
+<section class="band grid3">
+  <div><h2>Stock</h2><div id="stock"></div><p class="note">Reserved when the API commits, not when the worker finishes.</p></div>
+  <div><h2>Invariants</h2><div id="inv"></div></div>
+  <div><h2>/metrics</h2><div id="met"></div></div>
+</section>
+
+<section class="band grid2">
+  <div>
+    <h2>Orders table</h2>
+    <div class="scroll"><table class="stack"><thead><tr><th>Order</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th><th>Attempts</th><th>Worker</th></tr></thead><tbody id="orders"></tbody></table></div>
+    <p class="note" id="empty">No orders yet. Send one, or start a scenario.</p>
+  </div>
+  <div><h2>What just happened</h2><div class="log" id="log"></div></div>
+</section>
+
+<section class="band">
+  <h2>Who owns what</h2>
+  <div class="grid3" style="margin-top:14px">
+    <div class="owner" style="--c:var(--ch)"><h3 class="o">Chris</h3><p>How an order is accepted safely.</p><ul>
+      <li><code>api/</code>: validation, the atomic transaction, routes, health, metrics</li>
+      <li><code>db/migrations/</code>: constraints, trigger, seed 7 / 12 / 5</li>
+      <li><code>shared/</code>: config, JSON logs, migration runner</li>
+      <li>Tests: validation, contract, 4 race tests</li>
+      <li><code>ADR-001</code> and the checker result (15 / 0 / 0)</li></ul></div>
+    <div class="owner" style="--c:var(--bh)"><h3 class="o">Bahjat</h3><p>What happens after 202, and how code is built and checked.</p><ul>
+      <li><code>worker/</code>: claim, lease, retry with backoff, dead letter</li>
+      <li><code>Dockerfile</code>, <code>compose.yaml</code>, nginx</li>
+      <li><code>.github/workflows/ci.yml</code>: lint, tests, image, checker, SBOM, scan, publish</li>
+      <li>Red → green demo (PR #3)</li></ul></div>
+    <div class="owner" style="--c:var(--ib)"><h3 class="o">Ibaad</h3><p>How it runs in a cluster and stays equal to Git.</p><ul>
+      <li><code>infra/k8s/</code>: deployments, PSS restricted, NetworkPolicy, PDB</li>
+      <li><code>infra/argocd/</code>: auto-sync, prune, self-heal</li>
+      <li><code>scripts/drills.py</code>: rollout, broken release, drift, crash, poison</li>
+      <li>README, architecture, threat model, postmortem</li></ul></div>
+  </div>
+</section>
+
+<script>
+{
+const SEED={"KIT-100":[1299,7],"PART-200":[599,12],"PACK-300":[249,5]};
+const LEASE=4000,WORK=1400,SLOW=3600,RESTART=6000;
+const STAGES=["lint","tests","image","checker","SBOM","scan","publish"];
+const P={C:[70,350],L:[230,350],A1:[390,260],A2:[390,440],D:[600,350],W1:[810,257],W2:[810,437]};
+const $=id=>document.getElementById(id);
+let now=0,speed=1,last=performance.now(),rr=0,seq=0,lastKey=null,busyDelivery=false;
+let products,orders,keys,receipts,dbQueue,dbBusy,timers,dots,met,workers,apis,ci,argo,liveVer,probe;
+
+function reset(){
+  products={};for(const k in SEED)products[k]={price:SEED[k][0],avail:SEED[k][1]};
+  orders=[];keys=new Map();receipts=[];dbQueue=[];dbBusy=0;timers=[];dots=[];busyDelivery=false;probe=null;
+  met={created:0,h202:0,h409:0,h4xx:0,h503:0,replays:0,retries:0,reclaims:0,completed:0,failed:0};
+  workers=[{id:"worker-1",pt:"W1",alive:true,job:null},{id:"worker-2",pt:"W2",alive:true,job:null}];
+  liveVer=liveVer||"a41c2e7";
+  apis=[{pt:"A1",up:true,ver:liveVer,st:"ready"},{pt:"A2",up:true,ver:liveVer,st:"ready"}];
+  ci=STAGES.map(()=>"idle");argo="Synced · Healthy";
+  $("log").innerHTML="";log("g","Test data reset to the seed: KIT-100 = 7, PART-200 = 12, PACK-300 = 5.","002_seed_catalog.sql");
+}
+function later(ms,fn){timers.push({at:now+ms,fn})}
+function fly(path,color,ms,fn,hollow,r){dots.push({pts:path.map(k=>P[k]),c:color,start:now,dur:ms,fn,hollow,r:r||6})}
+function ts(){return (now/1000).toFixed(1)+"s"}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c])}
+function log(cls,text,sql){
+  const d=document.createElement("div");
+  d.innerHTML=`<span class="t">${ts()}</span><span class="${cls}">${esc(text)}</span>${sql?`<code>${esc(sql)}</code>`:""}`;
+  const L=$("log");L.prepend(d);while(L.children.length>100)L.lastChild.remove();
+}
+function uid(){return Array.from({length:8},()=>"0123456789abcdef"[Math.random()*16|0]).join("")}
+
+/* ---------- Chris: validation + atomic transaction ---------- */
+function validate(body){
+  if(!body.key||body.key.length<8)return{code:400,err:"IDEMPOTENCY_REQUIRED"};
+  if(typeof body.customer!=="string"||!body.customer||body.customer.length>64)return{code:400,err:"INVALID_REQUEST"};
+  if(!Array.isArray(body.items)||!body.items.length||body.items.length>10)return{code:400,err:"INVALID_REQUEST"};
+  const agg={};
+  for(const it of body.items){
+    if(typeof it.quantity!=="number"||!Number.isInteger(it.quantity)||it.quantity<1||it.quantity>20)return{code:422,err:"INVALID_QUANTITY"};
+    agg[it.sku]=(agg[it.sku]||0)+it.quantity;
+  }
+  const lines=Object.keys(agg).sort().map(s=>[s,agg[s]]);
+  return{ok:true,lines,hash:JSON.stringify([body.customer,lines])};
+}
+function transaction(req){
+  const ex=keys.get(req.key);
+  if(ex){
+    if(ex.hash!==req.v.hash)return{code:409,err:"IDEMPOTENCY_CONFLICT",sql:"INSERT … ON CONFLICT (idempotency_key) DO NOTHING → conflict\nsame key, different payload hash → ROLLBACK"};
+    met.replays++;return{code:202,replay:true,id:ex.id,sql:"INSERT … ON CONFLICT DO NOTHING → conflict, same payload\nreturns the original order_id before touching products"};
+  }
+  for(const[s]of req.v.lines)if(!(s in SEED))return{code:422,err:"INVALID_SKU",sql:"SELECT products … → unknown SKU, ROLLBACK"};
+  for(const[s,q]of req.v.lines)if(products[s].avail<q)
+    return{code:409,err:"OUT_OF_STOCK",sql:`SELECT … FOR UPDATE ORDER BY sku → ${s} available ${products[s].avail} < ${q}\nROLLBACK: no order, no partial allocation`};
+  let total=0;for(const[s,q]of req.v.lines){products[s].avail-=q;total+=q*products[s].price}
+  const o={id:uid(),key:req.key,hash:req.v.hash,customer:req.customer,lines:req.v.lines,total,status:"queued",attempts:0,max:5,nextAt:now,by:null,lease:0,slow:req.customer.startsWith("SLOW-"),poison:req.customer.startsWith("POISON-"),kill:req.kill};
+  orders.push(o);keys.set(req.key,o);met.created++;
+  return{code:202,id:o.id,sql:`INSERT orders … ON CONFLICT DO NOTHING → new row\nSELECT products FOR UPDATE ORDER BY sku; UPDATE available = available − q\nINSERT order_items; total = ${total}; COMMIT → 202 queued`};
+}
+function pickApi(){
+  const up=apis.filter(a=>a.up);if(!up.length)return null;
+  return up[rr++%up.length];
+}
+function post(body){
+  const api=pickApi(),n=++seq;
+  if(!api){met.h503++;log("e",`#${n} → 503: no ready API pod`);fly(["C","L","C"],"var(--cr)",500);return}
+  fly(["C","L",api.pt],"var(--mute)",650,()=>{
+    const v=validate(body);
+    if(!v.ok){met.h4xx++;
+      log("e",`#${n} ${api.pt==="A1"?"API 1":"API 2"} → ${v.code} ${v.err}`,body.items.some(i=>i.quantity===true)?"type(value) is int rejects a bool. isinstance(value, int) would accept it: True is an int in Python.":"rejected before any database work");
+      fly([api.pt,"L","C"],"var(--cr)",550);return}
+    fly([api.pt,"D"],"var(--mute)",350,()=>dbQueue.push({...body,v,n,api:api.pt}));
+  });
+}
+function finish(req,r){
+  if(r.code===202){met.h202++;log("g",`#${req.n} ${r.replay?"replay":"accepted"} → 202 order ${r.id}${r.replay?" (same order_id)":""}`,r.sql)}
+  else{r.code===409?met.h409++:met.h4xx++;log("e",`#${req.n} → ${r.code} ${r.err}`,r.sql)}
+  fly(["D",req.api,"L","C"],r.code===202?(r.replay?"var(--mute)":"var(--ch)"):"var(--cr)",700,null,r.replay);
+}
+
+/* ---------- Bahjat: worker ---------- */
+function claim(w){
+  const due=orders.filter(o=>(o.status==="queued"&&o.nextAt<=now)||(o.status==="processing"&&o.lease<now)).sort((a,b)=>a.nextAt-b.nextAt)[0];
+  if(!due)return;
+  const reclaimed=due.status==="processing";
+  due.status="processing";due.attempts++;due.by=w.id;due.lease=now+LEASE;
+  if(reclaimed){met.reclaims++;log("e",`${w.id} reclaims ${due.id}: the previous lease expired`,"WHERE status='processing' AND lease_expires_at < now() … FOR UPDATE SKIP LOCKED")}
+  else log("b",`${w.id} claims ${due.id} (attempt ${due.attempts}/${due.max})`,"SELECT … FOR UPDATE SKIP LOCKED; status = 'processing', lease = now() + interval");
+  const job={o:due,attempt:due.attempts};w.job=job;
+  fly(["D",w.pt],"var(--bh)",400);
+  if(due.attempts>due.max){later(300,()=>fail(w,job,"attempt budget exhausted by repeated worker crashes"));return}
+  if(due.kill){due.kill=false;later(1000,()=>kill(w))}
+  job.end=now+(due.slow?SLOW:WORK);
+}
+function owns(w,job){const o=job.o;return o.status==="processing"&&o.by===w.id&&o.attempts===job.attempt}
+function complete(w,job){
+  w.job=null;const o=job.o;
+  if(!owns(w,job)){log("e",`${w.id} lost the lease on ${o.id}: lease_lost, no receipt`,"_still_owner() is false under FOR UPDATE");return}
+  if(!receipts.some(r=>r.order===o.id)){receipts.push({order:o.id,worker:w.id});met.completed++}
+  o.status="completed";o.by=null;
+  log("b",`${w.id} completes ${o.id}: receipt written`,"INSERT fulfillment_receipts (PK order_id) ON CONFLICT DO NOTHING; status = 'completed'");
+  fly([w.pt,"D"],"var(--bh)",400);
+}
+function fail(w,job,msg){
+  w.job=null;const o=job.o;if(!owns(w,job))return;o.by=null;
+  if(job.attempt>=o.max){o.status="failed";met.failed++;log("e",`${o.id} dead-lettered after ${job.attempt} attempts. Stock stays reserved for a human to review.`,"status = 'failed'; INSERT dead_letters")}
+  else{const d=Math.min(10,.5*2**(job.attempt-1))*(0.8+Math.random()*.4);o.status="queued";o.nextAt=now+d*1000;met.retries++;
+    log("e",`${o.id} failed attempt ${job.attempt}: retry in ${d.toFixed(2)} s`,msg+"\nbackoff = min(cap, 0.5 × 2^(attempt−1)) ± 20% jitter")}
+  fly([w.pt,"D"],"var(--cr)",400);
+}
+function kill(w){
+  if(!w.alive)return;w.alive=false;
+  log("e",`SIGKILL ${w.id}${w.job?` while it holds ${w.job.o.id}`:""}. The job stays 'processing' until its lease expires.`,"Kubernetes restarts the pod in "+RESTART/1000+" s");
+  w.job=null;later(RESTART,()=>{w.alive=true;log("b",`${w.id} restarted`)});
+}
+
+/* ---------- Bahjat: CI pipeline ---------- */
+function runCI(kind,done){
+  if(busyDelivery){log("e","A delivery is already running. Wait for it to finish.");return}
+  busyDelivery=true;ci=STAGES.map(()=>"idle");
+  const sha=uid().slice(0,7);
+  $("gits").textContent=kind==="bad"?"PR: bool bug":"main · "+sha;
+  log("b",kind==="bad"?`PR opened: validation.py uses isinstance(value, int) (commit ${sha})`:`Commit ${sha} pushed to main`);
+  let i=0;
+  const step=()=>{
+    ci[i]="run";
+    later(650,()=>{
+      if(kind==="bad"&&STAGES[i]==="tests"){ci[i]="fail";
+        log("e","CI red: test_boolean_quantity_is_rejected FAILED. Image, checker, scan and publish never run.","needs: [lint, test] → a red check can never publish");
+        later(1500,()=>{busyDelivery=false;$("gits").textContent="main · "+liveVer;log("b","main is unchanged. Push the fix (type(value) is int) to the same PR and CI goes green.")});return}
+      ci[i]="ok";
+      if(STAGES[i]==="checker")log("b","Public checker against the compose stack: 15 passed / 0 failed / 0 skipped");
+      if(STAGES[i]==="scan")log("b","SBOM generated; grype: no critical vulnerability with a fix available");
+      i++;if(i<STAGES.length)step();else{log("b",`Published ghcr.io/bahjat9/fulfillops:${sha}, the same image that was scanned`);done(sha)}
+    });
+  };step();
+}
+
+/* ---------- Ibaad: Argo CD + rollouts ---------- */
+function startProbe(){probe={ok:0,fail:0,on:true};const tick=()=>{if(!probe||!probe.on)return;
+  const a=pickApi();if(a){probe.ok++;fly(["C","L",a.pt,"L","C"],"var(--ib)",700,null,true,4)}else{probe.fail++;fly(["C","L","C"],"var(--cr)",500,null,false,4)}
+  later(350,tick)};tick()}
+function stopProbe(){if(!probe)return;probe.on=false;
+  log(probe.fail?"e":"i",`Probe: ${probe.ok+probe.fail} requests while the cluster changed, ${probe.fail} failed`,"drills.py sends requests the whole time → docs/evidence/")}
+function rollout(ver,broken){
+  argo="OutOfSync → syncing";log("i",`Argo CD sees newTag ${ver} in Git: OutOfSync, syncing`,"syncPolicy: automated, prune, selfHeal");
+  startProbe();
+  const one=(k,next)=>{const a=apis[k];
+    a.st="new pod starting";argo="Progressing";
+    log("i",`${a.pt==="A1"?"API pod 1":"API pod 2"}: a new pod starts next to the old one`,"maxSurge: 1, maxUnavailable: 0 → never fewer than 2 ready pods");
+    later(1800,()=>{
+      if(broken){a.st="new pod not ready";argo="Degraded";
+        log("e","New pod fails /health/ready, so the Service never sends it traffic. Rollout halts at progressDeadlineSeconds.","the old pods keep serving every request");
+        later(2200,()=>{log("i","git revert of the release commit → Argo CD syncs the previous tag","human fix through Git, not kubectl");
+          later(1500,()=>{a.st="ready";argo="Synced · Healthy";stopProbe();busyDelivery=false;$("gits").textContent="main · "+liveVer;$("tag").textContent="newTag: "+liveVer;log("i",`Back on ${liveVer}. No request failed.`)})});
+        return}
+      a.ver=ver;a.st="ready";log("i",`${a.pt==="A1"?"API pod 1":"API pod 2"} now runs :${ver} (ready for minReadySeconds), old pod removed`);
+      next();
+    });
+  };
+  one(0,()=>later(400,()=>one(1,()=>{liveVer=ver;argo="Synced · Healthy";stopProbe();busyDelivery=false;log("i",`Rollout complete: both API pods on :${ver}. Workers roll the same way.`)})));
+}
+function drift(){
+  if(busyDelivery){log("e","A delivery is already running. Wait for it to finish.");return}
+  busyDelivery=true;const a=apis[1];a.up=false;a.st="deleted by kubectl";argo="OutOfSync";
+  log("e","Someone runs kubectl scale deployment fulfillops-api --replicas=1. The cluster no longer matches Git.","live state: 1 replica · Git: replicas: 2");
+  startProbe();
+  later(2200,()=>{argo="Self-healing";log("i","Argo CD self-heal re-applies Git: replicas: 2","safe for stateless drift; data changes need a human");
+    a.st="new pod starting";
+    later(1600,()=>{a.up=true;a.st="ready";a.ver=liveVer;argo="Synced · Healthy";stopProbe();busyDelivery=false;log("i","Back to 2 ready API pods, equal to Git.")})});
+}
+
+/* ---------- buttons ---------- */
+function order(sku,qty,customer,key,extra){return Object.assign({key:key||"key-"+uid(),customer:customer||"CUST-"+String(100+(Math.random()*900|0)),items:[{sku,quantity:qty}]},extra||{})}
+$("send").onclick=()=>{const key=$("reuse").checked&&lastKey?lastKey:"key-"+uid();lastKey=key;post(order($("sku").value,Number($("qty").value),"CUST-042",key))};
+$("race").onclick=()=>{reset();log("g","Race: 24 clients, 24 distinct keys, 1 × PART-200 each. Only 12 units exist.");for(let i=0;i<24;i++)later(i*25,()=>post(order("PART-200",1)))};
+$("same").onclick=()=>{const k="key-"+uid();log("g",`8 identical requests with Idempotency-Key ${k}, spread over both pods`);for(let i=0;i<8;i++)later(i*30,()=>post(order("KIT-100",1,"CUST-007",k)))};
+$("bool").onclick=()=>post(order("KIT-100",true,"CUST-042"));
+$("crash").onclick=()=>post(order("PACK-300",1,"SLOW-"+uid().slice(0,4),null,{kill:true}));
+$("poison").onclick=()=>post(order("PACK-300",1,"POISON-"+uid().slice(0,4)));
+$("redpr").onclick=()=>runCI("bad");
+$("good").onclick=()=>runCI("good",sha=>{$("tag").textContent="newTag: "+sha;later(500,()=>rollout(sha,false))});
+$("broken").onclick=()=>runCI("good",sha=>{$("tag").textContent="newTag: "+sha;later(500,()=>rollout(sha,true))});
+$("drift").onclick=drift;
+$("reset").onclick=reset;
+$("speed").onchange=e=>speed=Number(e.target.value);
+
+/* ---------- render ---------- */
+function render(){
+  $("stock").innerHTML=Object.keys(SEED).map(s=>{const a=products[s].avail,m=SEED[s][1];
+    return `<div class="kv"><span>${s}</span><b>${a} / ${m}</b></div><div class="bar"><i style="width:${a/m*100}%"></i></div>`}).join("");
+  const reserved={};for(const s in SEED)reserved[s]=0;for(const o of orders)for(const[s,q]of o.lines)reserved[s]+=q;
+  const cons=Object.keys(SEED).every(s=>products[s].avail+reserved[s]===SEED[s][1]);
+  const neg=Object.values(products).every(p=>p.avail>=0);
+  const rc={};let dup=false;for(const r of receipts){if(rc[r.order])dup=true;rc[r.order]=1}
+  const inv=[["Stock never negative",neg],["available + reserved = seed",cons],["One key → one order",keys.size===orders.length],["At most one receipt per order",!dup],["Completed orders = receipts",orders.filter(o=>o.status==="completed").length===receipts.length],["At least one API pod ready",apis.some(a=>a.up)]];
+  $("inv").innerHTML=inv.map(([t,ok])=>`<div class="kv"><span>${t}</span><span class="${ok?"ok":"bad"}">${ok?"holds":"broken"}</span></div>`).join("");
+  const M=[["orders_created_total",met.created],["http 202",met.h202],["http 409",met.h409],["http 400 / 422",met.h4xx],["http 503",met.h503],["idempotent replays",met.replays],["worker_retries_total",met.retries],["worker_reclaims_total",met.reclaims],["orders_completed_total",met.completed],["orders_failed_total",met.failed]];
+  $("met").innerHTML=M.map(([k,v])=>`<div class="kv"><span>${k}</span><b>${v}</b></div>`).join("");
+  $("orders").innerHTML=orders.slice(-14).reverse().map(o=>`<tr><td>${o.id}</td><td>${esc(o.customer)}</td><td>${o.lines.map(([s,q])=>q+"× "+s).join(", ")}</td><td class="n">${(o.total/100).toFixed(2)} €</td><td><span class="chip s-${o.status}">${o.status}</span></td><td class="n">${o.attempts}/${o.max}</td><td>${o.by||""}</td></tr>`).join("");
+  $("empty").style.display=orders.length?"none":"block";
+  $("dbq").textContent="queued jobs: "+orders.filter(o=>o.status==="queued").length;
+  $("dbl").textContent="waiting for lock: "+dbQueue.length;
+  $("dbs").textContent="receipts "+receipts.length+" · dead letters "+orders.filter(o=>o.status==="failed").length;
+  workers.forEach((w,i)=>{$(i?"w2r":"w1r").setAttribute("class","node"+(w.alive?"":" dead"));
+    $(i?"w2s":"w1s").textContent=!w.alive?"killed, restarting":w.job?"processing "+w.job.o.id.slice(0,6):"idle, polling"});
+  apis.forEach((a,i)=>{$(i?"a2v":"a1v").textContent="image :"+a.ver;$(i?"a2s":"a1s").textContent=a.st;
+    $(i?"a2g":"a1g").setAttribute("class",a.up?"":"gone");
+    $(i?"a2s":"a1s").style.fill=/not ready|deleted/.test(a.st)?"var(--cr)":/starting/.test(a.st)?"var(--ib)":"var(--mute)"});
+  const A=$("argos");A.textContent=argo;A.style.fill=/Degraded|OutOfSync/.test(argo)?"var(--cr)":"var(--ib)";
+  $("ci").innerHTML=STAGES.map((s,i)=>{const st=ci[i],x=138+i*54;
+    const fill=st==="ok"?"var(--bh)":st==="fail"?"var(--cr)":st==="run"?"var(--bhs)":"var(--soft)";
+    const tc=st==="ok"||st==="fail"?"var(--bg)":"var(--ink)";
+    return `<rect x="${x}" y="58" width="50" height="24" rx="5" fill="${fill}" stroke="${st==="idle"?"var(--rule)":st==="fail"?"var(--cr)":"var(--bh)"}"/><text x="${x+25}" y="74" font-size="10.5" text-anchor="middle" style="fill:${tc}">${s}</text>`}).join("");
+}
+function drawDots(){
+  const pts=[],cbs=[];dots=dots.filter(d=>{
+    const t=Math.min(1,(now-d.start)/d.dur),segs=d.pts.length-1,f=t*segs,i=Math.min(segs-1,f|0),u=f-i;
+    const a=d.pts[i],b=d.pts[i+1];pts.push(`<circle cx="${a[0]+(b[0]-a[0])*u}" cy="${a[1]+(b[1]-a[1])*u}" r="${d.r}" fill="${d.hollow?"var(--bg)":d.c}" stroke="${d.c}" stroke-width="2"/>`);
+    if(t>=1){d.fn&&cbs.push(d.fn);return false}return true});
+  cbs.forEach(f=>f());
+  $("dots").innerHTML=pts.join("");
+}
+$("clients").innerHTML=[0,1,2,3,4].map(i=>`<circle cx="${52+(i%2)*36}" cy="${290+i*28}" r="9" class="node"/>`).join("");
+
+let acc=0;
+function loop(t){
+  const dt=Math.min(100,t-last)*speed;last=t;now+=dt;
+  const due=timers.filter(x=>x.at<=now);timers=timers.filter(x=>x.at>now);due.forEach(x=>x.fn());
+  if(dbBusy&&now>=dbBusy)dbBusy=0;
+  if(!dbBusy&&dbQueue.length){const req=dbQueue.shift();dbBusy=now+140;finish(req,transaction(req))}
+  for(const w of workers){if(!w.alive)continue;
+    if(w.job&&w.job.end&&now>=w.job.end){const j=w.job;j.o.poison?fail(w,j,"PoisonOrderError: deterministic permanent failure"):complete(w,j)}
+    else if(!w.job)claim(w)}
+  drawDots();acc+=dt;if(acc>120){acc=0;render()}
+  requestAnimationFrame(loop);
+}
+reset();render();requestAnimationFrame(loop);
+}
+</script>
+</body>
+</html>
